@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<title>Employee Tree</title>
+<style>
+  body {
+    font-family: sans-serif;
+    margin: 0;
+    overflow: hidden;
+  }
+  svg {
+    width: 100vw;
+    height: 100vh;
+    background: #f5f6fa;
+  }
+  .node rect {
+    fill: white;
+    stroke: #333;
+    stroke-width: 1.5px;
+    rx: 6;
+    ry: 6;
+    filter: drop-shadow(0px 1px 3px rgba(0,0,0,0.2));
+  }
+  .node text {
+    font-size: 12px;
+    pointer-events: none;
+  }
+  .edgePath path {
+    stroke: #777;
+    stroke-width: 1.4px;
+    fill: none;
+  }
+</style>
+
+<!-- 必要ライブラリ：D3 + ELKJS -->
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+<script src="https://cdn.jsdelivr.net/npm/elkjs/lib/elk.bundled.js"></script>
+</head>
+
+<body>
+<svg id="svg"></svg>
+
+<script>
+// JSON 読み込み
+fetch("data.json")
+  .then(res => res.json())
+  .then(data => render(data));
+
+// 入社年度 → 日付 → 社員 の階層構造と、
+// 同セクション縦つなぎ線を作成
+async function render(employees) {
+  // 年度でグループ
+  const byYear = {};
+  for (const e of employees) {
+    if (!byYear[e.year]) byYear[e.year] = [];
+    byYear[e.year].push(e);
+  }
+
+  const elk = new ELK();
+
+  const nodes = [];
+  const edges = [];
+
+  for (const year of Object.keys(byYear)) {
+    const yearId = `year_${year}`;
+    nodes.push({ id: yearId, labels: [{ text: `${year}年度` }], width: 100, height: 30 });
+
+    // 年度内を join_date でソート
+    const sorted = byYear[year].sort((a, b) => a.join_date.localeCompare(b.join_date));
+
+    // 同日単位でグループ
+    const byDay = {};
+    for (const e of sorted) {
+      if (!byDay[e.join_date]) byDay[e.join_date] = [];
+      byDay[e.join_date].push(e);
+    }
+
+    for (const day of Object.keys(byDay)) {
+      const dayId = `${yearId}_${day}`;
+      nodes.push({ id: dayId, labels: [{ text: day }], width: 100, height: 30 });
+
+      // 年度 → 日付（木構造）
+      edges.push({ id: `${yearId}_${day}_edge`, sources: [yearId], targets: [dayId] });
+
+      // 日付配下の社員
+      const people = byDay[day];
+      for (const p of people) {
+        const pId = `p_${p.name}_${p.join_date}`;
+        nodes.push({
+          id: pId,
+          labels: [{ text: `${p.name}\n${p.section}` }],
+          width: 130,
+          height: 40
+        });
+
+        edges.push({ id: `${dayId}_${pId}_edge`, sources: [dayId], targets: [pId] });
+      }
+
+      // セクション縦つなぎ（同セクション同士を線で結ぶ）
+      for (let i = 0; i < people.length - 1; i++) {
+        if (people[i].section === people[i + 1].section) {
+          const a = `p_${people[i].name}_${people[i].join_date}`;
+          const b = `p_${people[i + 1].name}_${people[i + 1].join_date}`;
+          edges.push({
+            id: `sec_${a}_${b}`,
+            sources: [a],
+            targets: [b],
+            style: { stroke: "#00a" }
+          });
+        }
+      }
+    }
+  }
+
+  // ELK レイアウト設定
+  const graph = {
+    id: "root",
+    layoutOptions: {
+      "elk.algorithm": "layered",
+      "elk.direction": "DOWN",
+      "elk.spacing.nodeNode": 40,
+      "elk.spacing.edgeNode": 20,
+      "elk.layered.spacing.nodeNodeBetweenLayers": 60
+    },
+    children: nodes,
+    edges
+  };
+
+  const layout = await elk.layout(graph);
+
+  // SVG 描画
+  const svg = d3.select("#svg");
+  const g = svg.append("g");
+
+  // パン・ズーム
+  svg.call(
+    d3.zoom().scaleExtent([0.3, 2]).on("zoom", (ev) => {
+      g.attr("transform", ev.transform);
+    })
+  );
+
+  // ノード描画
+  g.selectAll("g.node")
+    .data(layout.children)
+    .enter()
+    .append("g")
+    .attr("class", "node")
+    .attr("transform", d => `translate(${d.x}, ${d.y})`)
+    .each(function (d) {
+      const node = d3.select(this);
+      node.append("rect")
+        .attr("width", d.width)
+        .attr("height", d.height);
+      node.append("text")
+        .attr("x", d.width / 2)
+        .attr("y", d.height / 2)
+        .attr("text-anchor", "middle")
+        .attr("dominant-baseline", "middle")
+        .text(d.labels[0].text);
+    });
+
+  // エッジ描画
+  g.selectAll("path.edge")
+    .data(layout.edges)
+    .enter()
+    .append("path")
+    .attr("class", "edgePath")
+    .attr("d", d => {
+      const sections = d.sections || [];
+      return d3.line().x(s => s.x).y(s => s.y)(sections);
+    });
+}
+</script>
+</body>
+</html>

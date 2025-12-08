@@ -1,0 +1,6 @@
+[
+  { "name": "Aさん", "year": 2021, "join_date": "2021-04-01", "section": "Environment" },
+  { "name": "Bさん", "year": 2021, "join_date": "2021-04-01", "section": "Environment" },
+  { "name": "Cさん", "year": 2021, "join_date": "2021-07-12", "section": "Graphics" },
+  { "name": "Dさん", "year": 2022, "join_date": "2022-02-03", "section": "Tools" }
+]
