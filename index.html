@@ -2,11 +2,11 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8" />
-<title>Employee Tree</title>
+<title>Employee Year × Section Grid</title>
 <style>
   body {
-    font-family: sans-serif;
     margin: 0;
+    font-family: sans-serif;
     overflow: hidden;
   }
   svg {
@@ -15,162 +15,173 @@
     background: #f5f6fa;
   }
   .node rect {
-    fill: white;
     stroke: #333;
-    stroke-width: 1.5px;
+    stroke-width: 1.2px;
     rx: 6;
     ry: 6;
-    filter: drop-shadow(0px 1px 3px rgba(0,0,0,0.2));
   }
   .node text {
-    font-size: 12px;
+    font-size: 13px;
     pointer-events: none;
   }
-  .edgePath path {
-    stroke: #777;
-    stroke-width: 1.4px;
+  .yearLabel, .sectionLabel {
+    font-size: 18px;
+    font-weight: bold;
+    fill: #333;
+  }
+  .edge {
+    stroke: #555;
+    stroke-width: 2px;
     fill: none;
   }
 </style>
 
-<!-- 必要ライブラリ：D3 + ELKJS -->
 <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
-<script src="https://cdn.jsdelivr.net/npm/elkjs/lib/elk.bundled.js"></script>
 </head>
-
 <body>
+
 <svg id="svg"></svg>
 
 <script>
-// JSON 読み込み
-fetch("data.json")
-  .then(res => res.json())
-  .then(data => render(data));
+// ---------------------------------------------------------
+// ★ ここに社員データを入れる（年だけ使う）
+// ---------------------------------------------------------
+const employees = [
+  { "name": "Aさん", "year": 2001, "section": "Engineer" },
+  { "name": "Bさん", "year": 2002, "section": "Engineer" },
+  { "name": "Dさん", "year": 2003, "section": "Engineer" },
 
-// 入社年度 → 日付 → 社員 の階層構造と、
-// 同セクション縦つなぎ線を作成
-async function render(employees) {
-  // 年度でグループ
-  const byYear = {};
-  for (const e of employees) {
-    if (!byYear[e.year]) byYear[e.year] = [];
-    byYear[e.year].push(e);
-  }
+  { "name": "Cさん", "year": 2001, "section": "Planner" },
 
-  const elk = new ELK();
+  { "name": "Eさん", "year": 2003, "section": "Designer" },
+  { "name": "Fさん", "year": 2003, "section": "Designer" }
+];
 
-  const nodes = [];
-  const edges = [];
+// ---------------------------------------------------------
+// セクション定義（色つき）
+// ---------------------------------------------------------
+const sections = [
+  { name: "Engineer", color: "#4CAF50" },
+  { name: "Planner",  color: "#2196F3" },
+  { name: "Designer", color: "#FF9800" }
+];
 
-  for (const year of Object.keys(byYear)) {
-    const yearId = `year_${year}`;
-    nodes.push({ id: yearId, labels: [{ text: `${year}年度` }], width: 100, height: 30 });
+// ---------------------------------------------------------
+// レイアウト設定
+// ---------------------------------------------------------
+const cellWidth = 200;   // 年度幅
+const cellHeight = 150;  // セクション高さ
+const nodeWidth = 140;
+const nodeHeight = 40;
 
-    // 年度内を join_date でソート
-    const sorted = byYear[year].sort((a, b) => a.join_date.localeCompare(b.join_date));
+const svg = d3.select("#svg");
+const g = svg.append("g");
 
-    // 同日単位でグループ
-    const byDay = {};
-    for (const e of sorted) {
-      if (!byDay[e.join_date]) byDay[e.join_date] = [];
-      byDay[e.join_date].push(e);
-    }
+// パン・ズーム
+svg.call(d3.zoom()
+  .scaleExtent([0.4, 2])
+  .on("zoom", ev => g.attr("transform", ev.transform))
+);
 
-    for (const day of Object.keys(byDay)) {
-      const dayId = `${yearId}_${day}`;
-      nodes.push({ id: dayId, labels: [{ text: day }], width: 100, height: 30 });
+// ---------------------------------------------------------
+// 年度一覧を抽出してソート
+// ---------------------------------------------------------
+const years = [...new Set(employees.map(e => e.year))].sort();
 
-      // 年度 → 日付（木構造）
-      edges.push({ id: `${yearId}_${day}_edge`, sources: [yearId], targets: [dayId] });
+// ---------------------------------------------------------
+// 年度ラベル描画
+// ---------------------------------------------------------
+years.forEach((year, i) => {
+  g.append("text")
+    .attr("class", "yearLabel")
+    .attr("x", i * cellWidth + cellWidth / 2)
+    .attr("y", 40)
+    .attr("text-anchor", "middle")
+    .text(`${year}年`);
+});
 
-      // 日付配下の社員
-      const people = byDay[day];
-      for (const p of people) {
-        const pId = `p_${p.name}_${p.join_date}`;
-        nodes.push({
-          id: pId,
-          labels: [{ text: `${p.name}\n${p.section}` }],
-          width: 130,
-          height: 40
-        });
+// ---------------------------------------------------------
+// セクションラベル描画
+// ---------------------------------------------------------
+sections.forEach((sec, j) => {
+  g.append("text")
+    .attr("class", "sectionLabel")
+    .attr("x", 10)
+    .attr("y", j * cellHeight + 140)
+    .text(sec.name);
+});
 
-        edges.push({ id: `${dayId}_${pId}_edge`, sources: [dayId], targets: [pId] });
-      }
+// ---------------------------------------------------------
+// グリッド座標に社員を配置
+// ---------------------------------------------------------
+let placed = []; // { id, x, y, section, year, name }
 
-      // セクション縦つなぎ（同セクション同士を線で結ぶ）
-      for (let i = 0; i < people.length - 1; i++) {
-        if (people[i].section === people[i + 1].section) {
-          const a = `p_${people[i].name}_${people[i].join_date}`;
-          const b = `p_${people[i + 1].name}_${people[i + 1].join_date}`;
-          edges.push({
-            id: `sec_${a}_${b}`,
-            sources: [a],
-            targets: [b],
-            style: { stroke: "#00a" }
-          });
-        }
-      }
-    }
-  }
+sections.forEach((sec, secIndex) => {
+  years.forEach((year, yearIndex) => {
 
-  // ELK レイアウト設定
-  const graph = {
-    id: "root",
-    layoutOptions: {
-      "elk.algorithm": "layered",
-      "elk.direction": "DOWN",
-      "elk.spacing.nodeNode": 40,
-      "elk.spacing.edgeNode": 20,
-      "elk.layered.spacing.nodeNodeBetweenLayers": 60
-    },
-    children: nodes,
-    edges
-  };
+    const people = employees.filter(e =>
+      e.section === sec.name && e.year === year
+    );
 
-  const layout = await elk.layout(graph);
+    // 同年に複数人いれば横に並べる
+    people.forEach((p, i) => {
+      const x = yearIndex * cellWidth + 100 + (i * (nodeWidth + 10));
+      const y = secIndex * cellHeight + 100;
 
-  // SVG 描画
-  const svg = d3.select("#svg");
-  const g = svg.append("g");
-
-  // パン・ズーム
-  svg.call(
-    d3.zoom().scaleExtent([0.3, 2]).on("zoom", (ev) => {
-      g.attr("transform", ev.transform);
-    })
-  );
-
-  // ノード描画
-  g.selectAll("g.node")
-    .data(layout.children)
-    .enter()
-    .append("g")
-    .attr("class", "node")
-    .attr("transform", d => `translate(${d.x}, ${d.y})`)
-    .each(function (d) {
-      const node = d3.select(this);
-      node.append("rect")
-        .attr("width", d.width)
-        .attr("height", d.height);
-      node.append("text")
-        .attr("x", d.width / 2)
-        .attr("y", d.height / 2)
-        .attr("text-anchor", "middle")
-        .attr("dominant-baseline", "middle")
-        .text(d.labels[0].text);
+      placed.push({
+        id: `${p.name}_${year}_${sec.name}`,
+        name: p.name,
+        section: sec.name,
+        color: sec.color,
+        year,
+        x,
+        y
+      });
     });
+  });
+});
 
-  // エッジ描画
-  g.selectAll("path.edge")
-    .data(layout.edges)
-    .enter()
-    .append("path")
-    .attr("class", "edgePath")
-    .attr("d", d => {
-      const sections = d.sections || [];
-      return d3.line().x(s => s.x).y(s => s.y)(sections);
-    });
-}
+// ---------------------------------------------------------
+// セクション内の縦線（年の順に並べてつなぐ）
+// ---------------------------------------------------------
+sections.forEach(sec => {
+  const list = placed
+    .filter(p => p.section === sec.name)
+    .sort((a, b) => a.year - b.year);
+
+  for (let i = 0; i < list.length - 1; i++) {
+    g.append("line")
+      .attr("class", "edge")
+      .attr("x1", list[i].x + nodeWidth / 2)
+      .attr("y1", list[i].y + nodeHeight)
+      .attr("x2", list[i + 1].x + nodeWidth / 2)
+      .attr("y2", list[i + 1].y)
+      .attr("stroke", sec.color);
+  }
+});
+
+// ---------------------------------------------------------
+// ノード描画
+// ---------------------------------------------------------
+const node = g.selectAll(".node")
+  .data(placed)
+  .enter()
+  .append("g")
+  .attr("class", "node")
+  .attr("transform", d => `translate(${d.x}, ${d.y})`);
+
+node.append("rect")
+  .attr("width", nodeWidth)
+  .attr("height", nodeHeight)
+  .attr("fill", d => d.color);
+
+node.append("text")
+  .attr("x", nodeWidth / 2)
+  .attr("y", nodeHeight / 2 + 5)
+  .attr("text-anchor", "middle")
+  .text(d => d.name);
+
 </script>
+
 </body>
 </html>
