@@ -1,187 +1,230 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<meta charset="UTF-8" />
-<title>Employee Year × Section Grid</title>
+<meta charset="UTF-8">
+<title>Employee Tree (Year × Section × Group)</title>
+
+<!-- Tailwind for modern UI -->
+<script src="https://cdn.tailwindcss.com"></script>
+
+<!-- D3 for zoom + SVG lines -->
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+
 <style>
-  body {
-    margin: 0;
-    font-family: sans-serif;
-    overflow: hidden;
+  body { margin: 0; overflow: hidden; }
+  .card {
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
   }
-  svg {
-    width: 100vw;
-    height: 100vh;
-    background: #f5f6fa;
+  .card:hover {
+    z-index: 1000;
+    box-shadow: 0 8px 16px rgba(0,0,0,0.25);
   }
-  .node rect {
-    stroke: #333;
-    stroke-width: 1.2px;
-    rx: 6;
-    ry: 6;
-  }
-  .node text {
-    font-size: 13px;
-    pointer-events: none;
-  }
-  .yearLabel, .sectionLabel {
-    font-size: 18px;
+  .year-label {
     font-weight: bold;
-    fill: #333;
+    font-size: 20px;
   }
-  .edge {
-    stroke: #555;
-    stroke-width: 2px;
-    fill: none;
+  .section-label {
+    font-weight: bold;
+    font-size: 18px;
   }
 </style>
 
-<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
 </head>
 <body>
 
-<svg id="svg"></svg>
+<div id="container" class="relative w-[2000px] h-[3000px]"></div>
+<svg id="lines" class="absolute top-0 left-0 w-[2000px] h-[3000px] pointer-events-none"></svg>
 
 <script>
-// ---------------------------------------------------------
-// ★ ここに社員データを入れる（年だけ使う）
-// ---------------------------------------------------------
-const employees = [
-  { "name": "Aさん", "year": 2001, "section": "Engineer" },
-  { "name": "Bさん", "year": 2002, "section": "Engineer" },
-  { "name": "Dさん", "year": 2003, "section": "Engineer" },
+// -------------------------------------------------------
+// ★ サンプルデータ（5年 × 3セクション × 3班 × 年0〜5人）
+// -------------------------------------------------------
 
-  { "name": "Cさん", "year": 2001, "section": "Planner" },
+const sample = [
+  // ==== 2001年 ====
+  {name:"A1", year:2001, section:"Engineer", group:"A班"},
+  {name:"A2", year:2001, section:"Engineer", group:"B班"},
+  {name:"P1", year:2001, section:"Planner",  group:"企画班"},
+  {name:"D1", year:2001, section:"Designer", group:"背景班"},
 
-  { "name": "Eさん", "year": 2003, "section": "Designer" },
-  { "name": "Fさん", "year": 2003, "section": "Designer" }
+  // ==== 2002年（少なめ）====
+  {name:"A3", year:2002, section:"Engineer", group:"A班"},
+  {name:"P2", year:2002, section:"Planner",  group:"企画班"},
+
+  // ==== 2003年（4人）====
+  {name:"A4", year:2003, section:"Engineer", group:"A班"},
+  {name:"P3", year:2003, section:"Planner",  group:"調整班"},
+  {name:"D2", year:2003, section:"Designer", group:"背景班"},
+  {name:"D3", year:2003, section:"Designer", group:"モーション班"},
+
+  // ==== 2004年（0人）====
+  // だれもいない年
+
+  // ==== 2005年（多め）====
+  {name:"A5", year:2005, section:"Engineer", group:"A班"},
+  {name:"A6", year:2005, section:"Engineer", group:"B班"},
+  {name:"A7", year:2005, section:"Engineer", group:"C班"},
+  {name:"P4", year:2005, section:"Planner",  group:"企画班"},
+  {name:"D4", year:2005, section:"Designer", group:"モーション班"},
 ];
 
-// ---------------------------------------------------------
-// セクション定義（色つき）
-// ---------------------------------------------------------
+// -------------------------------------------------------
+// セクション & 班
+// -------------------------------------------------------
 const sections = [
-  { name: "Engineer", color: "#4CAF50" },
-  { name: "Planner",  color: "#2196F3" },
-  { name: "Designer", color: "#FF9800" }
+  {name:"Engineer", color:"#4CAF50"},
+  {name:"Planner",  color:"#2196F3"},
+  {name:"Designer", color:"#FF9800"}
 ];
 
-// ---------------------------------------------------------
-// レイアウト設定
-// ---------------------------------------------------------
-const cellWidth = 200;   // 年度幅
-const cellHeight = 150;  // セクション高さ
-const nodeWidth = 140;
-const nodeHeight = 40;
+const groupsOrder = ["A班","B班","C班","企画班","調整班","背景班","モーション班"];
 
-const svg = d3.select("#svg");
-const g = svg.append("g");
+// -------------------------------------------------------
+// レイアウト寸法
+// -------------------------------------------------------
+const yearHeight = 260;  
+const sectionWidth = 500;
+const groupWidth = 160;
+const cardW = 120;
+const cardH = 48;
 
-// パン・ズーム
-svg.call(d3.zoom()
-  .scaleExtent([0.4, 2])
-  .on("zoom", ev => g.attr("transform", ev.transform))
-);
+const container = document.getElementById("container");
+const svg = d3.select("#lines");
 
-// ---------------------------------------------------------
-// 年度一覧を抽出してソート
-// ---------------------------------------------------------
-const years = [...new Set(employees.map(e => e.year))].sort();
+// -------------------------------------------------------
+// 年度一覧（上→下）
+// -------------------------------------------------------
+const years = [...new Set(sample.map(d=>d.year))].sort();
 
-// ---------------------------------------------------------
-// 年度ラベル描画
-// ---------------------------------------------------------
-years.forEach((year, i) => {
-  g.append("text")
-    .attr("class", "yearLabel")
-    .attr("x", i * cellWidth + cellWidth / 2)
-    .attr("y", 40)
-    .attr("text-anchor", "middle")
-    .text(`${year}年`);
+// -------------------------------------------------------
+// UI生成
+// -------------------------------------------------------
+let cardPositions = []; // {name, x, y, year, section, group}
+
+// 年ラベル
+years.forEach((year, yi) => {
+  const yPos = yi * yearHeight + 40;
+  const label = document.createElement("div");
+  label.className = "absolute year-label left-4 text-gray-700";
+  label.style.top = `${yPos}px`;
+  label.textContent = `${year} 年`;
+  container.appendChild(label);
 });
 
-// ---------------------------------------------------------
-// セクションラベル描画
-// ---------------------------------------------------------
-sections.forEach((sec, j) => {
-  g.append("text")
-    .attr("class", "sectionLabel")
-    .attr("x", 10)
-    .attr("y", j * cellHeight + 140)
-    .text(sec.name);
+// セクションラベル
+sections.forEach((sec, si) => {
+  const xPos = si * sectionWidth + 120;
+  const label = document.createElement("div");
+  label.className = "absolute section-label text-gray-800";
+  label.style.left = `${xPos}px`;
+  label.style.top = `10px`;
+  label.textContent = sec.name;
+  container.appendChild(label);
 });
 
-// ---------------------------------------------------------
-// グリッド座標に社員を配置
-// ---------------------------------------------------------
-let placed = []; // { id, x, y, section, year, name }
-
-sections.forEach((sec, secIndex) => {
-  years.forEach((year, yearIndex) => {
-
-    const people = employees.filter(e =>
-      e.section === sec.name && e.year === year
+// -------------------------------------------------------
+// カード配置
+// -------------------------------------------------------
+sections.forEach((sec, si) => {
+  years.forEach((year, yi) => {
+    const yearPeople = sample.filter(
+      d => d.year === year && d.section === sec.name
     );
 
-    // 同年に複数人いれば横に並べる
-    people.forEach((p, i) => {
-      const x = yearIndex * cellWidth + 100 + (i * (nodeWidth + 10));
-      const y = secIndex * cellHeight + 100;
+    // 班ごとにソート
+    const sorted = yearPeople.sort(
+      (a, b) => groupsOrder.indexOf(a.group) - groupsOrder.indexOf(b.group)
+    );
 
-      placed.push({
-        id: `${p.name}_${year}_${sec.name}`,
-        name: p.name,
-        section: sec.name,
-        color: sec.color,
-        year,
-        x,
-        y
-      });
+    sorted.forEach((p, idx) => {
+      const x = si * sectionWidth + 120 + (groupsOrder.indexOf(p.group) * groupWidth);
+      const y = yi * yearHeight + 80;
+
+      // HTML カード
+      const card = document.createElement("div");
+      card.className =
+        "card absolute bg-white shadow-md rounded-lg px-3 py-2 border cursor-pointer";
+      card.style.left = `${x}px`;
+      card.style.top = `${y}px`;
+      card.style.width = `${cardW}px`;
+      card.style.height = `${cardH}px`;
+      card.style.borderColor = sec.color;
+      card.dataset.year = year;
+
+      card.innerHTML = `
+        <div class="font-bold text-gray-800">${p.name}</div>
+        <div class="text-xs text-gray-500">${p.group}</div>
+      `;
+      container.appendChild(card);
+
+      cardPositions.push({ name:p.name, x, y, year, section:sec.name, group:p.group });
+
+      // ホバー同期強調
+      card.addEventListener("mouseenter", ()=>highlightYear(year));
+      card.addEventListener("mouseleave", ()=>resetHighlight());
     });
   });
 });
 
-// ---------------------------------------------------------
-// セクション内の縦線（年の順に並べてつなぐ）
-// ---------------------------------------------------------
+// -------------------------------------------------------
+// 線（班ごとに縦につなぐ）
+// -------------------------------------------------------
 sections.forEach(sec => {
-  const list = placed
-    .filter(p => p.section === sec.name)
-    .sort((a, b) => a.year - b.year);
+  groupsOrder.forEach(group => {
 
-  for (let i = 0; i < list.length - 1; i++) {
-    g.append("line")
-      .attr("class", "edge")
-      .attr("x1", list[i].x + nodeWidth / 2)
-      .attr("y1", list[i].y + nodeHeight)
-      .attr("x2", list[i + 1].x + nodeWidth / 2)
-      .attr("y2", list[i + 1].y)
-      .attr("stroke", sec.color);
-  }
+    const list = cardPositions
+      .filter(p => p.section === sec.name && p.group === group)
+      .sort((a,b)=>a.year - b.year);
+
+    for(let i=0; i<list.length-1; i++){
+      svg.append("line")
+        .attr("x1", list[i].x + cardW/2)
+        .attr("y1", list[i].y + cardH)
+        .attr("x2", list[i+1].x + cardW/2)
+        .attr("y2", list[i+1].y)
+        .attr("stroke", sec.color)
+        .attr("stroke-width", 3)
+        .attr("opacity", 0.8);
+    }
+
+  });
 });
 
-// ---------------------------------------------------------
-// ノード描画
-// ---------------------------------------------------------
-const node = g.selectAll(".node")
-  .data(placed)
-  .enter()
-  .append("g")
-  .attr("class", "node")
-  .attr("transform", d => `translate(${d.x}, ${d.y})`);
+// -------------------------------------------------------
+// ホバー同期強調
+// -------------------------------------------------------
+function highlightYear(targetYear){
+  document.querySelectorAll(".card").forEach(card=>{
+    if(Number(card.dataset.year) === targetYear){
+      card.style.transform = "scale(1.2)";
+      card.style.zIndex = 999;
+    } else {
+      card.style.opacity = "0.35";
+      card.style.transform = "scale(0.9)";
+    }
+  });
+}
 
-node.append("rect")
-  .attr("width", nodeWidth)
-  .attr("height", nodeHeight)
-  .attr("fill", d => d.color);
+function resetHighlight(){
+  document.querySelectorAll(".card").forEach(card=>{
+    card.style.opacity = "1";
+    card.style.transform = "scale(1)";
+    card.style.zIndex = 1;
+  });
+}
 
-node.append("text")
-  .attr("x", nodeWidth / 2)
-  .attr("y", nodeHeight / 2 + 5)
-  .attr("text-anchor", "middle")
-  .text(d => d.name);
+// -------------------------------------------------------
+// ズーム・パン
+// -------------------------------------------------------
+const zoom = d3.zoom()
+  .scaleExtent([0.5, 2])
+  .on("zoom", (ev)=>{
+    container.style.transform = ev.transform;
+    svg.attr("transform", ev.transform);
+  });
+
+d3.select("body").call(zoom);
 
 </script>
-
 </body>
 </html>
