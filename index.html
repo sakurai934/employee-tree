@@ -4,10 +4,10 @@
 <meta charset="UTF-8">
 <title>Employee Tree (Year × Section × Group)</title>
 
-<!-- Tailwind でモダンUI -->
+<!-- TailwindCSS -->
 <script src="https://cdn.tailwindcss.com"></script>
 
-<!-- D3（SVG線 & ズーム用） -->
+<!-- D3.js -->
 <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
 
 <style>
@@ -32,53 +32,40 @@
 
 <body>
 
-<!-- ズーム対象のラッパ -->
-<div id="zoom-wrapper" class="relative w-[2000px] h-[3000px]">
+<div id="zoom-wrapper" class="relative">
   <div id="container" class="absolute top-0 left-0"></div>
-  <svg id="lines" class="absolute top-0 left-0 w-full h-full pointer-events-none"></svg>
+  <svg id="lines" class="absolute top-0 left-0 pointer-events-none"></svg>
 </div>
 
 <script>
-// ----------------------
-// 外部 JSON 読み込み
-// ----------------------
 fetch("./data.json")
   .then(res => res.json())
   .then(data => init(data));
 
 function init(sample) {
 
-  // --------------------------
-  // セクション定義
-  // --------------------------
   const sections = [
-    {name:"Engineer", color:"#4CAF50"},
-    {name:"Planner",  color:"#2196F3"},
-    {name:"Designer", color:"#FF9800"}
+    {name: "Engineer", color: "#4CAF50"},
+    {name: "Planner",  color: "#2196F3"},
+    {name: "Designer", color: "#FF9800"}
   ];
 
-  // 班の優先順序（横並びに影響）
   const groupsOrder = ["A班","B班","C班","企画班","調整班","背景班","モーション班"];
 
-  // --------------------------
-  // レイアウト寸法
-  // --------------------------
   const yearHeight = 260;
   const sectionWidth = 500;
   const groupWidth = 160;
   const cardW = 130;
   const cardH = 48;
 
+  const wrapper = document.getElementById("zoom-wrapper");
   const container = document.getElementById("container");
   const svg = d3.select("#lines");
 
-  // --------------------------
-  // 年度（縦方向ソート）
-  // --------------------------
-  const years = [...new Set(sample.map(d=>d.year))].sort((a,b)=>a-b);
+  const years = [...new Set(sample.map(d => d.year))].sort((a,b)=>a-b);
 
   // --------------------------
-  // 年ラベル
+  // 年ラベル（縦方向）
   // --------------------------
   years.forEach((year, yi) => {
     const yPos = yi * yearHeight + 40;
@@ -102,23 +89,24 @@ function init(sample) {
     container.appendChild(label);
   });
 
+  let cardPositions = [];
+
   // --------------------------
   // カード配置
   // --------------------------
-  let cardPositions = [];
-
   sections.forEach((sec, si) => {
     years.forEach((year, yi) => {
+
       const yearPeople = sample.filter(
         d => d.year === year && d.section === sec.name
       );
 
       const sorted = yearPeople.sort(
-        (a,b)=>groupsOrder.indexOf(a.group) - groupsOrder.indexOf(b.group)
+        (a,b) => groupsOrder.indexOf(a.group) - groupsOrder.indexOf(b.group)
       );
 
-      sorted.forEach((p) => {
-        const x = si * sectionWidth + 150 + groupsOrder.indexOf(p.group) * groupWidth;
+      sorted.forEach(p => {
+        const x = si * sectionWidth + 150 + (groupsOrder.indexOf(p.group) * groupWidth);
         const y = yi * yearHeight + 80;
 
         const card = document.createElement("div");
@@ -147,29 +135,38 @@ function init(sample) {
   });
 
   // --------------------------
-  // 縦線（班ごと）
+  // 線の描画（カード配置完了後）
   // --------------------------
-  sections.forEach(sec=>{
-    groupsOrder.forEach(group=>{
-      const list = cardPositions
-        .filter(p=>p.section===sec.name && p.group===group)
-        .sort((a,b)=>a.year - b.year);
+  drawLines();
 
-      for(let i=0; i<list.length-1; i++){
-        svg.append("line")
-          .attr("x1", list[i].x + cardW/2)
-          .attr("y1", list[i].y + cardH)
-          .attr("x2", list[i+1].x + cardW/2)
-          .attr("y2", list[i+1].y)
-          .attr("stroke", sec.color)
-          .attr("stroke-width", 3)
-          .attr("opacity", 0.75);
-      }
+  function drawLines() {
+    svg.selectAll("*").remove(); // 一旦クリア
+
+    cardPositions.forEach(() => {});
+
+    sections.forEach(sec => {
+      groupsOrder.forEach(group => {
+
+        const list = cardPositions
+          .filter(p => p.section === sec.name && p.group === group)
+          .sort((a,b) => a.year - b.year);
+
+        for(let i=0; i<list.length-1; i++){
+          svg.append("line")
+            .attr("x1", list[i].x + cardW/2)
+            .attr("y1", list[i].y + cardH)
+            .attr("x2", list[i+1].x + cardW/2)
+            .attr("y2", list[i+1].y)
+            .attr("stroke", sec.color)
+            .attr("stroke-width", 3)
+            .attr("opacity", 0.75);
+        }
+      });
     });
-  });
+  }
 
   // --------------------------
-  // 同期ホバー強調
+  // 同期ホバー
   // --------------------------
   function highlightYear(targetYear){
     document.querySelectorAll(".card").forEach(card=>{
@@ -192,23 +189,37 @@ function init(sample) {
     });
   }
 
+  // --------------------------
+  // コンテンツ幅を動的計算
+  // --------------------------
+  const maxX = Math.max(...cardPositions.map(p=>p.x)) + cardW + 200;
+  const maxY = Math.max(...cardPositions.map(p=>p.y)) + cardH + 200;
+  wrapper.style.width = `${maxX}px`;
+  wrapper.style.height = `${maxY}px`;
+
+  // --------------------------
+  // ズーム（控えめな中央寄せ）
+  // --------------------------
+  const zoom = d3.zoom()
+    .scaleExtent([0.5, 2])
+    .on("zoom", ev => {
+      wrapper.style.transform = `
+        translate(${ev.transform.x}px, ${ev.transform.y}px)
+        scale(${ev.transform.k})
+      `;
+    });
+
+  const initialX = window.innerWidth * 0.25;  // 左 1/4 に寄せる（控えめ寄せ）
+  const initialY = 50;
+
+  const selection = d3.select("body");
+  selection.call(zoom);
+
+  selection.call(
+    zoom.transform,
+    d3.zoomIdentity.translate(initialX, initialY).scale(1)
+  );
 }
-
-// --------------------------
-// ズーム＆パン（バグ修正版）
-// --------------------------
-const zoom = d3.zoom()
-  .scaleExtent([0.5, 2])
-  .on("zoom", ev => {
-    const wrapper = document.getElementById("zoom-wrapper");
-    wrapper.style.transform = `
-      translate(${ev.transform.x}px, ${ev.transform.y}px)
-      scale(${ev.transform.k})
-    `;
-  });
-
-d3.select("#zoom-wrapper").call(zoom);
-
 </script>
 </body>
 </html>
