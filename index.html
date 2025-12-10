@@ -13,19 +13,21 @@
 <style>
   body {
     margin: 0;
-    overflow: auto;
+    overflow: hidden;
     background: #f3f4f6;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   }
   .cluster-card {
     transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+    z-index: 5;
   }
   .cluster-card:hover {
-    z-index: 1000;
+    z-index: 20;
     box-shadow: 0 8px 16px rgba(0,0,0,0.25);
   }
   .year-label {
     font-weight: bold;
-    font-size: 18px;
+    font-size: 16px;
   }
   .section-label {
     font-weight: bold;
@@ -36,10 +38,23 @@
 
 <body>
 
-<div id="viewport" class="w-screen h-screen overflow-auto relative">
+<!-- 検索バー -->
+<div class="w-full bg-white shadow flex items-center gap-3 px-4 py-2">
+  <div class="text-sm text-gray-700 font-semibold whitespace-nowrap">名前検索</div>
+  <input
+    id="search-input"
+    type="text"
+    placeholder="例: 佐藤 / さくら / 光莉"
+    class="flex-1 border rounded-md px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+  />
+</div>
+
+<!-- ビューポート -->
+<div id="viewport" class="w-screen relative" style="height: calc(100vh - 48px); overflow: auto;">
   <div id="zoom-wrapper" class="origin-top-left relative">
-    <svg id="lines" class="absolute top-0 left-0 pointer-events-none"></svg>
-    <div id="container" class="absolute top-0 left-0"></div>
+    <!-- 年・セクション背景帯もこの中に敷く -->
+    <svg id="lines" class="absolute top-0 left-0 pointer-events-none" style="z-index: 10;"></svg>
+    <div id="container" class="absolute top-0 left-0" style="z-index: 15;"></div>
   </div>
 </div>
 
@@ -55,25 +70,23 @@ function init(rawData) {
   // -----------------------------
   // データ正規化
   // -----------------------------
-  const data = rawData.map(d => ({
+  let data = rawData.map(d => ({
     ...d,
     year: Number(d.year),
     section: String(d.section).trim(),
     group: String(d.group).trim()
   }));
 
-  // 年・セクション一覧
   const years = [...new Set(data.map(d => d.year))].sort((a,b)=>a-b);
   const sectionNames = [...new Set(data.map(d => d.section))].sort();
 
-  // セクション色パレット
   const palette = [
     "#4CAF50","#2196F3","#FF9800","#9C27B0","#009688",
     "#E91E63","#3F51B5","#795548","#607D8B","#FFC107"
   ];
 
   // -----------------------------
-  // クラスタ（year × section × group）を作る
+  // クラスタ（year × section × group）
   // -----------------------------
   const clusterMap = {};
   data.forEach(p => {
@@ -91,7 +104,7 @@ function init(rawData) {
   const clusters = Object.values(clusterMap);
 
   // -----------------------------
-  // セクションごとの班一覧（クラスタから作り直す）
+  // セクション定義（クラスタから班一覧を取得）
   // -----------------------------
   const sections = sectionNames.map((name, idx) => {
     const groups = [...new Set(
@@ -105,26 +118,25 @@ function init(rawData) {
   });
 
   // -----------------------------
-  // レイアウト寸法
+  // レイアウト寸法（縦は自動）
   // -----------------------------
-  const yearHeight = 260;
-  const baseCardWidth = 160;
-  const baseCardHeight = 40;
-  const nameLineHeight = 18;
-  const yearTopMargin = 70;
+  const baseCardWidth = 180;
+  const yearTopMargin = 60;
   const leftYearLabelWidth = 80;
-  const sectionGap = 60;
-  const groupGap = 20;
+  const sectionGap = 80;
+  const groupGap = 24;
+  const minRowHeight = 120;     // 年の最低高さ
+  const verticalPadding = 30;   // 年内の上下余白（Q6=2相当）
 
   const zoomWrapper = document.getElementById("zoom-wrapper");
   const container = document.getElementById("container");
   const svg = d3.select("#lines");
 
   // -----------------------------
-  // セクションごとのXオフセット計算（班数に応じて可変）
+  // セクションのXオフセット計算
   // -----------------------------
   const sectionOffsets = {};
-  let currentX = leftYearLabelWidth + 40;
+  let currentX = leftYearLabelWidth + 40; // 左余白
 
   sections.forEach(sec => {
     const widthForSection = sec.groups.length * (baseCardWidth + groupGap);
@@ -136,63 +148,32 @@ function init(rawData) {
   });
 
   // -----------------------------
-  // 年ラベル
+  // まず全クラスタのカードを作成（仮Y=0で高さ計測）
   // -----------------------------
-  years.forEach((year, yi) => {
-    const yPos = yearTopMargin + yi * yearHeight;
-    const label = document.createElement("div");
-    label.className = "absolute year-label text-gray-700";
-    label.style.left = "16px";
-    label.style.top = `${yPos + 10}px`;
-    label.textContent = `${year} 年`;
-    container.appendChild(label);
-  });
-
-  // -----------------------------
-  // セクションラベル
-  // -----------------------------
-  sections.forEach(sec => {
-    const info = sectionOffsets[sec.name];
-    const centerX = info.x + info.width / 2;
-    const label = document.createElement("div");
-    label.className = "absolute section-label text-gray-800";
-    label.style.top = "10px";
-    label.style.left = `${centerX - 40}px`;
-    label.textContent = sec.name;
-    container.appendChild(label);
-  });
-
-  // -----------------------------
-  // クラスタを描画
-  // -----------------------------
-  const nodes = []; // [ {year, section, group, x, y, width, height, color, members} ]
+  const nodes = []; // {year,section,group,members,x,y,width,height,color,el}
 
   clusters.forEach(cluster => {
-    const yi = years.indexOf(cluster.year);
-    if (yi === -1) return; // 念のため
-
     const secInfo = sections.find(s => s.name === cluster.section);
     if (!secInfo) return;
-
     const secOffset = sectionOffsets[cluster.section];
     const gi = secInfo.groups.indexOf(cluster.group);
     if (gi === -1) return;
 
     const x = secOffset.x + gi * (baseCardWidth + groupGap);
-    const y = yearTopMargin + yi * yearHeight;
+    const provisionalY = 0; // 一旦0。あとで年ごとの高さ決めてから再配置
 
     const members = cluster.members;
     const cardWidth = baseCardWidth;
 
-    // 高さは中身に任せる（人数分だけ自然に伸びる）
     const card = document.createElement("div");
     card.className =
       "cluster-card absolute bg-white rounded-lg border px-3 py-2 shadow-sm cursor-pointer";
     card.style.left = `${x}px`;
-    card.style.top = `${y}px`;
+    card.style.top = `${provisionalY}px`;
     card.style.width = `${cardWidth}px`;
     card.style.borderColor = secInfo.color;
     card.dataset.year = cluster.year;
+    card.dataset.members = members.map(m=>m.name).join(" ");
 
     let inner = `
       <div class="text-xs font-semibold text-gray-700 mb-1">
@@ -208,7 +189,6 @@ function init(rawData) {
     card.innerHTML = inner;
     container.appendChild(card);
 
-    // 実際の高さを取るため、一旦 DOM に追加してから取得
     const rect = card.getBoundingClientRect();
     const height = rect.height;
 
@@ -218,15 +198,108 @@ function init(rawData) {
       group: cluster.group,
       members,
       x,
-      y,
+      y: provisionalY,
       width: cardWidth,
       height,
-      color: secInfo.color
+      color: secInfo.color,
+      el: card
     });
 
-    // 同期ホバー（同じ年の枠を強調）
+    // 年同期ホバー（検索中はそちら優先なのであとで制御）
     card.addEventListener("mouseenter", () => highlightYear(cluster.year));
     card.addEventListener("mouseleave", () => resetHighlight());
+  });
+
+  // -----------------------------
+  // 年ごとの高さを自動決定（Q5=1）
+  // -----------------------------
+  const yearHeights = [];
+  const yearOffsets = [];
+
+  let accY = yearTopMargin;
+
+  years.forEach((year, yi) => {
+    const yearNodes = nodes.filter(n => n.year === year);
+    const maxH = yearNodes.length ? Math.max(...yearNodes.map(n => n.height)) : 0;
+    const rowHeight = Math.max(minRowHeight, maxH + verticalPadding * 2);
+
+    yearHeights[yi] = rowHeight;
+    yearOffsets[yi] = accY;
+    accY += rowHeight;
+  });
+
+  // -----------------------------
+  // カードのY位置を年ごとに再配置
+  // -----------------------------
+  nodes.forEach(n => {
+    const yi = years.indexOf(n.year);
+    if (yi === -1) return;
+    const top = yearOffsets[yi] + verticalPadding;
+    n.y = top;
+    n.el.style.top = `${top}px`;
+  });
+
+  // -----------------------------
+  // 背景帯（年ごとの横帯 & セクションごとの縦帯）
+  // -----------------------------
+  const totalDiagramHeight = accY + 40;
+  const maxX = Math.max(...nodes.map(n => n.x + n.width)) + 80;
+
+  // 年の横帯（交互に色を変えて見やすく）
+  years.forEach((year, yi) => {
+    const band = document.createElement("div");
+    band.className = "absolute";
+    band.style.left = "0px";
+    band.style.top = `${yearOffsets[yi]}px`;
+    band.style.width = `${maxX}px`;
+    band.style.height = `${yearHeights[yi]}px`;
+    band.style.backgroundColor = yi % 2 === 0 ? "#f9fafb" : "#ffffff";
+    band.style.zIndex = "0";
+    band.style.pointerEvents = "none";
+    zoomWrapper.insertBefore(band, zoomWrapper.firstChild);
+  });
+
+  // セクション縦帯
+  sections.forEach(sec => {
+    const info = sectionOffsets[sec.name];
+    const band = document.createElement("div");
+    band.className = "absolute";
+    band.style.left = `${info.x - 8}px`;
+    band.style.top = `${yearTopMargin - 20}px`;
+    band.style.width = `${info.width + 16}px`;
+    band.style.height = `${totalDiagramHeight - yearTopMargin}px`;
+    band.style.backgroundColor = sec.color;
+    band.style.opacity = "0.06";
+    band.style.zIndex = "1";
+    band.style.pointerEvents = "none";
+    zoomWrapper.insertBefore(band, zoomWrapper.firstChild);
+  });
+
+  // -----------------------------
+  // 年ラベル
+  // -----------------------------
+  years.forEach((year, yi) => {
+    const yCenter = yearOffsets[yi] + 10;
+    const label = document.createElement("div");
+    label.className = "absolute year-label text-gray-700";
+    label.style.left = "16px";
+    label.style.top = `${yCenter}px`;
+    label.textContent = `${year} 年`;
+    container.appendChild(label);
+  });
+
+  // -----------------------------
+  // セクションラベル
+  // -----------------------------
+  sections.forEach(sec => {
+    const info = sectionOffsets[sec.name];
+    const centerX = info.x + info.width / 2;
+    const label = document.createElement("div");
+    label.className = "absolute section-label text-gray-800";
+    label.style.top = "16px";
+    label.style.left = `${centerX - 40}px`;
+    label.textContent = sec.name;
+    container.appendChild(label);
   });
 
   // -----------------------------
@@ -241,7 +314,6 @@ function init(rawData) {
       for (let i = 0; i < list.length - 1; i++) {
         const a = list[i];
         const b = list[i+1];
-
         svg.append("line")
           .attr("x1", a.x + a.width / 2)
           .attr("y1", a.y + a.height)
@@ -257,38 +329,82 @@ function init(rawData) {
   // -----------------------------
   // SVG & wrapper サイズ
   // -----------------------------
-  const maxX = Math.max(...nodes.map(n => n.x + n.width)) + 80;
-  const maxY = Math.max(...nodes.map(n => n.y + n.height)) + 80;
-
   zoomWrapper.style.width = `${maxX}px`;
-  zoomWrapper.style.height = `${maxY}px`;
-  svg.attr("width", maxX).attr("height", maxY);
+  zoomWrapper.style.height = `${totalDiagramHeight}px`;
+  svg.attr("width", maxX).attr("height", totalDiagramHeight);
 
   // -----------------------------
-  // 同期ホバー強調
+  // 名前検索バー
+  // -----------------------------
+  const searchInput = document.getElementById("search-input");
+
+  function applySearch(query) {
+    const q = query.trim();
+    const cards = document.querySelectorAll(".cluster-card");
+
+    if (!q) {
+      // 解除
+      cards.forEach(card => {
+        card.style.opacity = "1";
+        card.style.outline = "none";
+        card.style.transform = "scale(1)";
+      });
+      return;
+    }
+
+    const lower = q.toLowerCase();
+
+    cards.forEach(card => {
+      const names = (card.dataset.members || "").toLowerCase();
+      if (names.includes(lower)) {
+        card.style.opacity = "1";
+        card.style.outline = "2px solid #f97316"; // オレンジ
+        card.style.transform = "scale(1.04)";
+      } else {
+        card.style.opacity = "0.15";
+        card.style.outline = "none";
+        card.style.transform = "scale(0.96)";
+      }
+    });
+  }
+
+  searchInput.addEventListener("input", () => {
+    applySearch(searchInput.value);
+  });
+
+  // -----------------------------
+  // 同期ホバー強調（検索中は無効）
   // -----------------------------
   function highlightYear(targetYear) {
-    document.querySelectorAll(".cluster-card").forEach(card => {
+    if (searchInput.value.trim()) return; // 検索中は検索優先
+    const cards = document.querySelectorAll(".cluster-card");
+    cards.forEach(card => {
       const y = Number(card.dataset.year);
       if (y === targetYear) {
         card.style.transform = "scale(1.06)";
         card.style.opacity = "1";
-        card.style.zIndex = "1000";
+        card.style.zIndex = "20";
       } else {
         card.style.transform = "scale(0.94)";
         card.style.opacity = "0.35";
-        card.style.zIndex = "1";
+        card.style.zIndex = "5";
       }
     });
   }
 
   function resetHighlight() {
-    document.querySelectorAll(".cluster-card").forEach(card => {
+    if (searchInput.value.trim()) return; // 検索中は状態維持
+    const cards = document.querySelectorAll(".cluster-card");
+    cards.forEach(card => {
       card.style.transform = "scale(1)";
       card.style.opacity = "1";
-      card.style.zIndex = "1";
+      card.style.zIndex = "5";
     });
   }
+
+  // 外からも使えるようにグローバルへ
+  window.highlightYear = highlightYear;
+  window.resetHighlight = resetHighlight;
 
   // -----------------------------
   // ズーム & パン（控えめ中央寄せ）
