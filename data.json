@@ -1,20 +1,76 @@
 [
-  { "name": "佐藤 蓮", "year": 2001, "section": "Engineer", "group": "A班" },
+  { "name": "佐藤 蓮",   "year": 2001, "section": "Engineer", "group": "A班" },
   { "name": "高橋 海斗", "year": 2001, "section": "Engineer", "group": "B班" },
-  { "name": "木村 さくら", "year": 2001, "section": "Planner",  "group": "企画班" },
-  { "name": "吉田 光莉", "year": 2001, "section": "Designer", "group": "背景班" },
+  { "name": "中村 大和", "year": 2001, "section": "Engineer", "group": "B班" },
 
-  { "name": "中村 大和", "year": 2002, "section": "Engineer", "group": "A班" },
+  { "name": "木村 さくら", "year": 2001, "section": "Planner",  "group": "企画班" },
+
+  { "name": "吉田 光莉", "year": 2001, "section": "Designer", "group": "背景班" },
+  { "name": "平野 玲奈", "year": 2001, "section": "Designer", "group": "モーション班" },
+
+  { "name": "井上 悠真", "year": 2001, "section": "QA", "group": "テスト班" },
+
+  { "name": "山本 智也", "year": 2002, "section": "Engineer", "group": "A班" },
+  { "name": "渡辺 春樹", "year": 2002, "section": "Engineer", "group": "A班" },
+  { "name": "石川 翔太", "year": 2002, "section": "Engineer", "group": "A班" },
+
+  { "name": "田中 大輝", "year": 2002, "section": "Engineer", "group": "B班" },
+
+  { "name": "田中 美羽", "year": 2002, "section": "Planner",  "group": "企画班" },
   { "name": "小林 結衣", "year": 2002, "section": "Planner",  "group": "企画班" },
 
-  { "name": "斎藤 蒼", "year": 2003, "section": "Engineer", "group": "A班" },
-  { "name": "藤本 遥", "year": 2003, "section": "Planner",  "group": "調整班" },
+  { "name": "大西 奈々", "year": 2002, "section": "Designer", "group": "モーション班" },
+  { "name": "宮下 彩葉", "year": 2002, "section": "Designer", "group": "モーション班" },
+
+  { "name": "鈴木 陽斗", "year": 2002, "section": "QA", "group": "テスト班" },
+
+  { "name": "斎藤 蒼",   "year": 2003, "section": "Engineer", "group": "A班" },
+  { "name": "長谷川 陸", "year": 2003, "section": "Engineer", "group": "C班" },
+  { "name": "近藤 湊",   "year": 2003, "section": "Engineer", "group": "C班" },
+
+  { "name": "藤本 遥",   "year": 2003, "section": "Planner",  "group": "企画班" },
+  { "name": "柴田 由奈", "year": 2003, "section": "Planner",  "group": "企画班" },
+  { "name": "石井 日向", "year": 2003, "section": "Planner",  "group": "企画班" },
+  { "name": "佐々木 結菜", "year": 2003, "section": "Planner","group": "調整班" },
+
   { "name": "松本 心結", "year": 2003, "section": "Designer", "group": "背景班" },
+  { "name": "吉田 光莉", "year": 2003, "section": "Designer", "group": "背景班" },
   { "name": "平野 玲奈", "year": 2003, "section": "Designer", "group": "モーション班" },
 
-  { "name": "山本 智也", "year": 2005, "section": "Engineer", "group": "A班" },
-  { "name": "渡辺 春樹", "year": 2005, "section": "Engineer", "group": "B班" },
-  { "name": "石川 翔太", "year": 2005, "section": "Engineer", "group": "C班" },
-  { "name": "田中 美羽", "year": 2005, "section": "Planner",  "group": "企画班" },
-  { "name": "大西 奈々", "year": 2005, "section": "Designer", "group": "モーション班" }
+  { "name": "佐々木 春菜", "year": 2003, "section": "QA", "group": "テスト班" },
+  { "name": "森田 心",     "year": 2003, "section": "QA", "group": "テスト班" },
+  { "name": "片山 朔",     "year": 2003, "section": "QA", "group": "テスト班" },
+
+  { "name": "佐藤 蓮",   "year": 2004, "section": "Engineer", "group": "A班" },
+  { "name": "高橋 海斗", "year": 2004, "section": "Engineer", "group": "A班" },
+  { "name": "中村 大和", "year": 2004, "section": "Engineer", "group": "A班" },
+  { "name": "山本 智也", "year": 2004, "section": "Engineer", "group": "A班" },
+
+  { "name": "長谷川 陸", "year": 2004, "section": "Engineer", "group": "C班" },
+
+  { "name": "木村 さくら", "year": 2004, "section": "Planner", "group": "企画班" },
+  { "name": "田中 美羽",   "year": 2004, "section": "Planner", "group": "調整班" },
+
+  { "name": "大西 奈々",   "year": 2004, "section": "Designer", "group": "背景班" },
+  { "name": "宮下 彩葉",   "year": 2004, "section": "Designer", "group": "背景班" },
+  { "name": "松本 心結",   "year": 2004, "section": "Designer", "group": "背景班" },
+  { "name": "平野 玲奈",   "year": 2004, "section": "Designer", "group": "モーション班" },
+
+  { "name": "森田 心",   "year": 2004, "section": "QA", "group": "テスト班" },
+  { "name": "片山 朔",   "year": 2004, "section": "QA", "group": "テスト班" },
+
+  
+  { "name": "渡辺 春樹", "year": 2005, "section": "Engineer", "group": "A班" },
+  { "name": "石川 翔太", "year": 2005, "section": "Engineer", "group": "B班" },
+  { "name": "井上 悠真", "year": 2005, "section": "Engineer", "group": "B班" },
+
+  { "name": "佐々木 結菜", "year": 2005, "section": "Planner",  "group": "調整班" },
+  { "name": "藤本 遥",     "year": 2005, "section": "Planner",  "group": "調整班" },
+
+  { "name": "吉田 光莉", "year": 2005, "section": "Designer", "group": "背景班" },
+  { "name": "平野 玲奈", "year": 2005, "section": "Designer", "group": "モーション班" },
+  { "name": "大西 奈々", "year": 2005, "section": "Designer", "group": "モーション班" },
+  { "name": "宮下 彩葉", "year": 2005, "section": "Designer", "group": "モーション班" },
+
+  { "name": "佐々木 春菜", "year": 2005, "section": "QA", "group": "テスト班" }
 ]
