@@ -44,28 +44,58 @@
 </div>
 
 <script>
+// -----------------------------
 // 外部JSON読み込み
+// -----------------------------
 fetch("./data.json")
   .then(res => res.json())
-  .then(data => init(data));
+  .then(raw => init(raw));
 
-function init(data) {
+function init(rawData) {
   // -----------------------------
-  // 基本設定
+  // データ正規化
   // -----------------------------
+  const data = rawData.map(d => ({
+    ...d,
+    year: Number(d.year),
+    section: String(d.section).trim(),
+    group: String(d.group).trim()
+  }));
+
+  // 年・セクション一覧
   const years = [...new Set(data.map(d => d.year))].sort((a,b)=>a-b);
   const sectionNames = [...new Set(data.map(d => d.section))].sort();
 
-  // 色パレット（セクション数が増えても対応）
+  // セクション色パレット
   const palette = [
     "#4CAF50","#2196F3","#FF9800","#9C27B0","#009688",
     "#E91E63","#3F51B5","#795548","#607D8B","#FFC107"
   ];
 
-  // セクションごとの情報（班リストもここで作る）
+  // -----------------------------
+  // クラスタ（year × section × group）を作る
+  // -----------------------------
+  const clusterMap = {};
+  data.forEach(p => {
+    const key = `${p.year}|${p.section}|${p.group}`;
+    if (!clusterMap[key]) {
+      clusterMap[key] = {
+        year: p.year,
+        section: p.section,
+        group: p.group,
+        members: []
+      };
+    }
+    clusterMap[key].members.push(p);
+  });
+  const clusters = Object.values(clusterMap);
+
+  // -----------------------------
+  // セクションごとの班一覧（クラスタから作り直す）
+  // -----------------------------
   const sections = sectionNames.map((name, idx) => {
     const groups = [...new Set(
-      data.filter(d => d.section === name).map(d => d.group)
+      clusters.filter(c => c.section === name).map(c => c.group)
     )].sort();
     return {
       name,
@@ -74,7 +104,9 @@ function init(data) {
     };
   });
 
+  // -----------------------------
   // レイアウト寸法
+  // -----------------------------
   const yearHeight = 260;
   const baseCardWidth = 160;
   const baseCardHeight = 40;
@@ -89,10 +121,10 @@ function init(data) {
   const svg = d3.select("#lines");
 
   // -----------------------------
-  // セクションのオフセットXを計算（班数に応じて可変幅）
+  // セクションごとのXオフセット計算（班数に応じて可変）
   // -----------------------------
-  let sectionOffsets = {};
-  let currentX = leftYearLabelWidth + 40; // 左に少し余白
+  const sectionOffsets = {};
+  let currentX = leftYearLabelWidth + 40;
 
   sections.forEach(sec => {
     const widthForSection = sec.groups.length * (baseCardWidth + groupGap);
@@ -102,25 +134,6 @@ function init(data) {
     };
     currentX += widthForSection + sectionGap;
   });
-
-  // -----------------------------
-  // クラスタ（年×セクション×班）の塊を作る
-  // -----------------------------
-  const clusterMap = {};
-  data.forEach(person => {
-    const key = `${person.year}|${person.section}|${person.group}`;
-    if (!clusterMap[key]) {
-      clusterMap[key] = {
-        year: person.year,
-        section: person.section,
-        group: person.group,
-        members: []
-      };
-    }
-    clusterMap[key].members.push(person);
-  });
-
-  const clusters = Object.values(clusterMap);
 
   // -----------------------------
   // 年ラベル
@@ -150,30 +163,34 @@ function init(data) {
   });
 
   // -----------------------------
-  // クラスタの位置を計算してカード描画
+  // クラスタを描画
   // -----------------------------
-  let nodes = []; // {year, section, group, x, y, width, height, color, members}
+  const nodes = []; // [ {year, section, group, x, y, width, height, color, members} ]
 
   clusters.forEach(cluster => {
     const yi = years.indexOf(cluster.year);
+    if (yi === -1) return; // 念のため
+
     const secInfo = sections.find(s => s.name === cluster.section);
+    if (!secInfo) return;
+
     const secOffset = sectionOffsets[cluster.section];
     const gi = secInfo.groups.indexOf(cluster.group);
+    if (gi === -1) return;
 
     const x = secOffset.x + gi * (baseCardWidth + groupGap);
     const y = yearTopMargin + yi * yearHeight;
 
     const members = cluster.members;
-    const cardHeight = baseCardHeight + Math.max(0, members.length - 1) * nameLineHeight;
     const cardWidth = baseCardWidth;
 
-    // HTMLカード
+    // 高さは中身に任せる（人数分だけ自然に伸びる）
     const card = document.createElement("div");
-    card.className = "cluster-card absolute bg-white rounded-lg border px-3 py-2 shadow-sm cursor-pointer";
+    card.className =
+      "cluster-card absolute bg-white rounded-lg border px-3 py-2 shadow-sm cursor-pointer";
     card.style.left = `${x}px`;
     card.style.top = `${y}px`;
     card.style.width = `${cardWidth}px`;
-    card.style.height = `${cardHeight}px`;
     card.style.borderColor = secInfo.color;
     card.dataset.year = cluster.year;
 
@@ -181,8 +198,8 @@ function init(data) {
       <div class="text-xs font-semibold text-gray-700 mb-1">
         ${cluster.group}（${members.length}人）
       </div>
+      <div class="text-[11px] leading-tight text-gray-700">
     `;
-    inner += `<div class="text-[11px] leading-tight text-gray-700">`;
     members.forEach(m => {
       inner += `<div>・${m.name}</div>`;
     });
@@ -190,6 +207,10 @@ function init(data) {
 
     card.innerHTML = inner;
     container.appendChild(card);
+
+    // 実際の高さを取るため、一旦 DOM に追加してから取得
+    const rect = card.getBoundingClientRect();
+    const height = rect.height;
 
     nodes.push({
       year: cluster.year,
@@ -199,7 +220,7 @@ function init(data) {
       x,
       y,
       width: cardWidth,
-      height: cardHeight,
+      height,
       color: secInfo.color
     });
 
@@ -220,6 +241,7 @@ function init(data) {
       for (let i = 0; i < list.length - 1; i++) {
         const a = list[i];
         const b = list[i+1];
+
         svg.append("line")
           .attr("x1", a.x + a.width / 2)
           .attr("y1", a.y + a.height)
@@ -233,7 +255,7 @@ function init(data) {
   });
 
   // -----------------------------
-  // SVG サイズ & wrapper サイズ
+  // SVG & wrapper サイズ
   // -----------------------------
   const maxX = Math.max(...nodes.map(n => n.x + n.width)) + 80;
   const maxY = Math.max(...nodes.map(n => n.y + n.height)) + 80;
@@ -246,8 +268,7 @@ function init(data) {
   // 同期ホバー強調
   // -----------------------------
   function highlightYear(targetYear) {
-    const cards = document.querySelectorAll(".cluster-card");
-    cards.forEach(card => {
+    document.querySelectorAll(".cluster-card").forEach(card => {
       const y = Number(card.dataset.year);
       if (y === targetYear) {
         card.style.transform = "scale(1.06)";
@@ -262,8 +283,7 @@ function init(data) {
   }
 
   function resetHighlight() {
-    const cards = document.querySelectorAll(".cluster-card");
-    cards.forEach(card => {
+    document.querySelectorAll(".cluster-card").forEach(card => {
       card.style.transform = "scale(1)";
       card.style.opacity = "1";
       card.style.zIndex = "1";
@@ -285,7 +305,7 @@ function init(data) {
   const selection = d3.select("#viewport");
   selection.call(zoom);
 
-  const initialX = window.innerWidth * 0.2;  // 画面幅の20%くらい右にずらす（控えめ中央寄せ）
+  const initialX = window.innerWidth * 0.2;
   const initialY = 40;
 
   selection.call(
